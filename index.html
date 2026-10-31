@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#1f7a5a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="增肌记录">
+<link rel="manifest" href="manifest.json">
+<title>增肌训练记录</title>
+<style>
+:root{--bg:#f6f7f5;--card:#fff;--text:#1d1d1f;--muted:#777;--accent:#1f7a5a;--line:#e8e8e5}
+*{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif}
+.app{max-width:720px;margin:auto;padding:20px 16px 90px}.hero{padding:18px 4px 10px}.hero h1{margin:0;font-size:28px}.hero p{color:var(--muted);margin:7px 0 0}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:16px 0}.stat,.card{background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:0 3px 14px #00000008}
+.stat{padding:14px}.stat b{display:block;font-size:20px;margin-top:5px}.stat span{font-size:12px;color:var(--muted)}
+.card{padding:18px;margin:12px 0}.card h2{font-size:18px;margin:0 0 12px}
+.tabs{display:flex;gap:8px;overflow:auto;margin:10px 0 16px}.tab{border:0;border-radius:99px;padding:10px 15px;background:#e9ece8;white-space:nowrap;font-size:14px}.tab.active{background:var(--accent);color:white}
+.view{display:none}.view.active{display:block}.exercise{border-top:1px solid var(--line);padding:14px 0}.exercise:first-of-type{border-top:0}.row{display:flex;justify-content:space-between;align-items:center;gap:10px}
+small{color:var(--muted)}button.primary{background:var(--accent);color:white;border:0;border-radius:12px;padding:12px 16px;font-size:15px;font-weight:600}
+button.secondary{background:#edf1ee;color:var(--accent);border:0;border-radius:10px;padding:9px 12px}
+.sets{margin-top:10px}.set{display:grid;grid-template-columns:40px 1fr 1fr 48px;gap:8px;margin:7px 0;align-items:center}
+input{width:100%;border:1px solid var(--line);background:#fafafa;border-radius:9px;padding:10px;font-size:14px}.check{width:18px;height:18px;accent-color:var(--accent)}
+.big-input{margin:8px 0 12px}.progress{height:9px;background:#edf0ec;border-radius:9px;overflow:hidden;margin-top:10px}.bar{height:100%;background:var(--accent);width:0%;transition:.3s}
+.empty{text-align:center;color:var(--muted);padding:25px 10px}.history-item{padding:12px 0;border-bottom:1px solid var(--line)}
+.fab{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);width:min(688px,calc(100% - 32px));display:flex;justify-content:center;pointer-events:none}.fab button{pointer-events:auto}
+.footer-note{font-size:12px;color:var(--muted);text-align:center;margin-top:18px}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="hero"><div style="font-size:13px;color:#42b98a;font-weight:600;margin-bottom:10px">MY MUSCLE · V2</div><h1>增肌训练记录</h1><p id="todayText"></p></div>
+
+  <div class="grid">
+    <div class="stat"><span>本周训练</span><b id="weekCount">0 次</b></div>
+    <div class="stat"><span>累计训练</span><b id="totalCount">0 次</b></div>
+    <div class="stat"><span>当前体重</span><b id="latestWeight">--</b></div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-view="train">今日训练</button>
+    <button class="tab" data-view="log">记录</button>
+    <button class="tab" data-view="progress">进度</button>
+  </div>
+
+  <section id="train" class="view active">
+    <div class="card">
+      <div class="row"><div><h2 id="workoutTitle">推：胸 + 肩 + 三头</h2><small id="workoutHint">以上肢增肌为主 · 自动参考训练记录</small></div>
+      <button class="secondary" onclick="cycleWorkout()">换计划</button></div>
+      <div id="exerciseList"></div>
+      <button class="primary" onclick="saveWorkout()">完成今天训练</button>
+    </div>
+    <div class="card"><h2>训练原则</h2><small>先保证动作稳定，再逐步增加重量或次数。大多数动作保留 1–3 次余力即可，不必每组都练到力竭。</small></div>
+  </section>
+
+  <section id="log" class="view">
+    <div class="card">
+      <h2>记录体重</h2>
+      <input id="weightInput" class="big-input" type="number" step="0.1" placeholder="例如 56.5（kg）">
+      <button class="primary" onclick="saveWeight()">保存体重</button>
+    </div>
+    <div class="card"><h2>训练历史</h2><div id="history"></div></div>
+  </section>
+
+  <section id="progress" class="view">
+    <div class="card">
+      <h2>本周目标</h2>
+      <div class="row"><span>训练 3 次</span><b id="goalText">0 / 3</b></div>
+      <div class="progress"><div class="bar" id="goalBar"></div></div>
+    </div>
+    <div class="card"><h2>体重变化</h2><div id="weightHistory" class="empty">还没有体重记录</div></div>
+  </section>
+
+  <p class="footer-note">数据只保存在这台设备的浏览器中。</p>
+</div>
+
+<script>
+const plans=[
+ {name:"推：胸 + 肩 + 三头", exercises:[["坐姿推胸",3,"8–12"],["上斜推胸",3,"8–12"],["器械肩推",3,"8–12"],["侧平举",3,"12–15"],["绳索下压",3,"10–15"]]},
+ {name:"拉：背 + 二头", exercises:[["高位下拉",3,"8–12"],["坐姿划船",3,"8–12"],["辅助引体向上",3,"6–10"],["反向飞鸟",3,"12–15"],["二头弯举",3,"10–15"]]},
+ {name:"上肢轻量恢复", exercises:[["坐姿推胸",2,"10–12"],["高位下拉",2,"10–12"],["侧平举",2,"12–15"],["二头弯举",2,"10–15"],["绳索下压",2,"10–15"]]}
+];
+let planIndex=0;
+let data=JSON.parse(localStorage.getItem("muscleAppData")||'{"workouts":[],"weights":[]}');
+
+function getLastExercise(name){
+ for(const workout of data.workouts){
+   const plan=plans.find(p=>p.name===workout.plan);
+   if(!plan) continue;
+   const idx=plan.exercises.findIndex(e=>e[0]===name);
+   if(idx>=0 && workout.sets[idx]){
+     const valid=workout.sets[idx].filter(s=>s.kg||s.reps);
+     if(valid.length) return valid.map(s=>`${s.kg||"?"}kg × ${s.reps||"?"}`).join("，");
+   }
+ }
+ return null;
+}
+function renderPlan(){
+ const p=plans[planIndex]; document.getElementById("workoutTitle").textContent=p.name;
+ const last=data.workouts[0];
+ const hint=document.getElementById("workoutHint");
+ hint.textContent=last ? `上次训练：${last.plan} · 今天建议练不同部位` : "以上肢增肌为主 · 从第一条训练记录开始";
+ document.getElementById("exerciseList").innerHTML=p.exercises.map((e,i)=>{
+   const previous=getLastExercise(e[0]);
+   return `<div class="exercise"><div class="row"><div><b>${e[0]}</b>${previous?`<br><small>上次：${previous}</small>`:""}</div><small>${e[1]} 组 × ${e[2]} 次</small></div>
+   <div class="sets">${Array.from({length:e[1]},(_,j)=>`<div class="set"><small>第${j+1}组</small><input type="number" placeholder="重量 kg"><input type="number" placeholder="次数"><input class="check" type="checkbox"></div>`).join("")}</div></div>`;
+ }).join("");
+}
+function cycleWorkout(){
+ const last=data.workouts[0]?.plan;
+ let next=(planIndex+1)%plans.length;
+ if(last){
+   const lastIndex=plans.findIndex(p=>p.name===last);
+   if(lastIndex>=0) next=(lastIndex+1)%2;
+ }
+ planIndex=next; renderPlan();
+}
+function save(){localStorage.setItem("muscleAppData",JSON.stringify(data))}
+function dateStr(){return new Date().toLocaleDateString("zh-CN",{month:"long",day:"numeric",weekday:"short"})}
+function saveWorkout(){
+ const p=plans[planIndex]; const sets=[...document.querySelectorAll(".exercise")].map(ex=>[...ex.querySelectorAll(".set")].map(s=>{
+   const inputs=s.querySelectorAll("input"); return {kg:inputs[0].value,reps:inputs[1].value,done:inputs[2].checked}
+ }));
+ data.workouts.unshift({date:new Date().toISOString(),plan:p.name,sets});save();renderStats();renderHistory();renderProgress();cycleWorkout();alert("已保存！训练已记录，下次打开会显示上次数据。");
+}
+function saveWeight(){
+ const v=parseFloat(document.getElementById("weightInput").value);if(!v||v<20||v>300){alert("请输入合理的体重");return}
+ data.weights.unshift({date:new Date().toISOString(),value:v});save();document.getElementById("weightInput").value="";renderStats();renderProgress();
+}
+function weekCount(){
+ const now=new Date(), start=new Date(now);start.setDate(now.getDate()-((now.getDay()+6)%7));start.setHours(0,0,0,0);
+ return data.workouts.filter(x=>new Date(x.date)>=start).length
+}
+function renderStats(){
+ const wc=weekCount();document.getElementById("weekCount").textContent=wc+" 次";
+ document.getElementById("totalCount").textContent=data.workouts.length+" 次";
+ document.getElementById("latestWeight").textContent=data.weights[0]?data.weights[0].value+" kg":"--";
+ document.getElementById("todayText").textContent=dateStr()+" · 记录每一次进步";
+}
+function renderHistory(){
+ const el=document.getElementById("history");if(!data.workouts.length){el.innerHTML='<div class="empty">还没有训练记录，完成今天的训练吧。</div>';return}
+ el.innerHTML=data.workouts.slice(0,10).map(x=>`<div class="history-item"><b>${x.plan}</b><br><small>${new Date(x.date).toLocaleDateString("zh-CN")}</small></div>`).join("");
+}
+function renderProgress(){
+ const wc=weekCount(), pct=Math.min(wc/3*100,100);document.getElementById("goalText").textContent=wc+" / 3";document.getElementById("goalBar").style.width=pct+"%";
+ const el=document.getElementById("weightHistory");if(!data.weights.length){el.className="empty";el.textContent="还没有体重记录";return}
+ el.className="";el.innerHTML=data.weights.slice(0,8).reverse().map(x=>`<div class="history-item"><span>${new Date(x.date).toLocaleDateString("zh-CN")}</span><b style="float:right">${x.value} kg</b></div>`).join("");
+}
+document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));t.classList.add("active");document.getElementById(t.dataset.view).classList.add("active")});
+renderPlan();renderStats();renderHistory();renderProgress();
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js"));
+}
+</script>
+</body></html>
